@@ -2,13 +2,15 @@ services:
   rdfc-mcp:
     build: .
     image: rdfc-mcp-server
+    restart: unless-stopped
     environment:
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       RDFC_MCP_REFRESH_INTERVAL_MS: ${RDFC_MCP_REFRESH_INTERVAL_MS:-}
+      MCP_HTTP_PORT: "3001"
+    ports:
+      - "127.0.0.1:3001:3001"
     volumes:
       - rdfc-mcp-cache:/data
-    stdin_open: true # MCP is stdio-based; the client attaches to stdin/stdout as the transport.
-    tty: false
 
 volumes:
   rdfc-mcp-cache:

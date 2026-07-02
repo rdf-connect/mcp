@@ -10,7 +10,8 @@ RUN npm run build
 
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production \
-    RDFC_MCP_CACHE_DIR=/data
+    RDFC_MCP_CACHE_DIR=/data \
+    MCP_HTTP_PORT=3001
 WORKDIR /app
 
 COPY package.json package-lock.json ./
@@ -20,7 +21,6 @@ COPY --from=build /app/dist ./dist
 RUN mkdir -p /data && chown -R node:node /app /data
 USER node
 VOLUME ["/data"]
+EXPOSE 3000
 
-# MCP talks JSON-RPC over stdio - there is no port to expose or healthcheck to poll.
-# Run with `docker run -i` (no -t) so a client can attach to stdin/stdout as the transport.
 ENTRYPOINT ["node", "dist/index.js"]
