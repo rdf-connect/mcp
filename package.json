@@ -1,0 +1,32 @@
+{
+  "name": "rdfc-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server that harvests the RDF-Connect ecosystem (processors, runners, orchestrators, pipelines) from GitHub and exposes it to agents for building pipelines.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "rdfc-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && mkdir -p dist/assets && cp src/assets/*.ttl dist/assets/",
+    "start": "node dist/index.js",
+    "dev": "tsc -p tsconfig.json --watch",
+    "harvest": "node dist/harvest-cli.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "rdf-data-factory": "^2.0.2",
+    "rdf-dereference": "^5.0.0",
+    "rdf-serialize": "^5.1.0",
+    "rdf-stores": "^2.2.0",
+    "stream-to-string": "^1.2.1",
+    "streamify-array": "^2.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@rdfjs/types": "^2.0.1",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

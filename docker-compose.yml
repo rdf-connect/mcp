@@ -1,0 +1,14 @@
+services:
+  rdfc-mcp:
+    build: .
+    image: rdfc-mcp-server
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      RDFC_MCP_REFRESH_INTERVAL_MS: ${RDFC_MCP_REFRESH_INTERVAL_MS:-}
+    volumes:
+      - rdfc-mcp-cache:/data
+    stdin_open: true # MCP is stdio-based; the client attaches to stdin/stdout as the transport.
+    tty: false
+
+volumes:
+  rdfc-mcp-cache:
