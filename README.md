@@ -32,15 +32,23 @@ GitHub API calls per run):
 export GITHUB_TOKEN=ghp_...
 ```
 
-### Run standalone
+## Transports
+
+The server supports two MCP transports, and picks one at startup based on whether `MCP_HTTP_PORT` is set:
+
+- **stdio** (default) - one process per client, talks JSON-RPC over stdin/stdout. What `npm start` and
+  most local MCP client configs (Claude Code, Claude Desktop) use.
+- **HTTP** (set `MCP_HTTP_PORT`) - the [Streamable HTTP](https://modelcontextprotocol.io) transport, with
+  stateful sessions (one `McpServer` per session, tracked by the `mcp-session-id` header). This is what
+  you want to deploy remotely - e.g. on a VPC, behind nginx or another reverse proxy that terminates TLS.
+  Besides `/mcp`, the HTTP server also serves a plain-HTML status page at `/` (live catalog stats plus the
+  client config snippet to copy) and a JSON health check at `/healthz`.
+
+### Run standalone (stdio)
 
 ```bash
 npm start
 ```
-
-### Register with an MCP client
-
-Example for a client that reads a JSON config with a `mcpServers` map (Claude Code, Claude Desktop, etc.):
 
 ```json
 {
@@ -54,52 +62,74 @@ Example for a client that reads a JSON config with a `mcpServers` map (Claude Co
 }
 ```
 
+### Run standalone (HTTP)
+
+```bash
+MCP_HTTP_PORT=3001 npm start
+```
+
+Then open `http://localhost:3001/` for the status page, or point an MCP client that supports remote/HTTP
+servers at the URL:
+
+```json
+{
+  "mcpServers": {
+    "rdfc": {
+      "url": "https://rdfc-mcp.internal.example.com/mcp"
+    }
+  }
+}
+```
+
+The HTTP server itself has no authentication or TLS - it's meant to sit behind a reverse proxy (nginx,
+etc.) on the same host or a private network that handles both. Don't expose `MCP_HTTP_PORT` directly to
+the public internet.
+
 ## Run with Docker
 
 ```bash
 docker build -t rdfc-mcp-server .
 ```
 
-MCP is stdio-based - the container's stdin/stdout *is* the transport, so it must be run with `-i`
-(interactive) and **not** `-t` (a pty would corrupt the JSON-RPC stream). A named volume at `/data` keeps
-the harvested catalog across container restarts; without it, every fresh container starts from an empty
-cache and re-harvests in the background before it has anything to answer with.
+The image defaults to the HTTP transport on port 3001 (`ENV MCP_HTTP_PORT=3001`), meant to be reverse-proxied
+by nginx (or similar) running alongside it:
 
 ```bash
-docker run -i --rm -v rdfc-mcp-cache:/data -e GITHUB_TOKEN=ghp_... rdfc-mcp-server
+docker run -d --restart unless-stopped \
+  -p 127.0.0.1:3001:3001 \
+  -v rdfc-mcp-cache:/data \
+  -e GITHUB_TOKEN=ghp_... \
+  rdfc-mcp-server
 ```
 
-Or via the included `docker-compose.yml` (reads `GITHUB_TOKEN` from your shell/`.env`):
+Binding to `127.0.0.1` keeps the unauthenticated HTTP port off the network entirely; point nginx's
+`proxy_pass` at `http://127.0.0.1:3001/mcp` and let it handle TLS/public exposure. Or via the included
+`docker-compose.yml` (reads `GITHUB_TOKEN`/etc. from your shell/`.env`), which does the same thing:
 
 ```bash
-docker compose run --rm rdfc-mcp
+docker compose up -d
 ```
 
-Register it with an MCP client the same way, just swap the command:
-
-```json
-{
-  "mcpServers": {
-    "rdfc": {
-      "command": "docker",
-      "args": ["run", "-i", "--rm", "-v", "rdfc-mcp-cache:/data", "rdfc-mcp-server"],
-      "env": { "GITHUB_TOKEN": "ghp_..." }
-    }
-  }
-}
-```
-
-To prewarm the volume before first use (avoids the first client session waiting on a background
-harvest):
+A named volume at `/data` keeps the harvested catalog across container restarts/redeploys; without it,
+every fresh container starts from an empty cache and serves nothing useful until the first background
+harvest finishes. Prewarm it before first use with:
 
 ```bash
 docker run --rm -v rdfc-mcp-cache:/data --entrypoint node rdfc-mcp-server dist/harvest-cli.js
+```
+
+If you'd rather run the container as a plain stdio server for a single local client instead, unset
+`MCP_HTTP_PORT` and run with `-i` (not `-t`, which would corrupt the JSON-RPC stream over a pty):
+
+```bash
+docker run -i --rm -v rdfc-mcp-cache:/data -e MCP_HTTP_PORT= -e GITHUB_TOKEN=ghp_... rdfc-mcp-server
 ```
 
 ## Configuration
 
 | Env var                        | Default                          | Purpose                                              |
 |---------------------------------|-----------------------------------|-------------------------------------------------------|
+| `MCP_HTTP_PORT`                 | unset (`3001` in the Docker image) | Set to serve HTTP (`/mcp`, `/`, `/healthz`) on this port instead of stdio. |
 | `GITHUB_TOKEN`                  | none                              | Auth token for GitHub API calls (raises rate limits). |
 | `RDFC_MCP_REFRESH_INTERVAL_MS`  | `21600000` (6h)                   | How often to re-harvest GitHub in the background.     |
 | `RDFC_MCP_CACHE_DIR`            | `~/.cache/rdfc-mcp` (`/data` in the Docker image) | Where `catalog.json` is cached between restarts. |
@@ -132,6 +162,11 @@ refresh (it's slow and burns GitHub rate limit) - as an operator, prewarm or for
 - `build_pipeline` - seeds a conversation with the primer plus a goal, pointing the agent at the tool
   workflow above.
 
+**HTTP-only routes** (when `MCP_HTTP_PORT` is set - not part of the MCP protocol itself)
+- `GET /` - plain HTML status page: live catalog stats, the MCP client config snippet, and a table of
+  available tools.
+- `GET /healthz` - JSON liveness/status check for load balancers and container orchestration.
+
 ## Notes / known limitations
 
 - Harvesting hits the public GitHub Search + REST APIs; without `GITHUB_TOKEN` you'll likely hit the 60
@@ -140,3 +175,7 @@ refresh (it's slow and burns GitHub rate limit) - as an operator, prewarm or for
   reader/writer parameters, TODO placeholders for other required params) - always review its output.
 - Component parameter paths are assumed to live under the `rdfc:` namespace when generating skeleton
   triples; a processor using a custom vocabulary property will need manual correction.
+- The HTTP transport uses stateful sessions kept in memory (`Map<sessionId, transport>`) - if you run
+  multiple replicas behind a load balancer, it needs to be session-affine (sticky) on `mcp-session-id`, or
+  every replica must share the same in-memory state (they currently don't).
+- Request bodies over 4MB on the HTTP transport are rejected (`413`) to bound memory use per request.
