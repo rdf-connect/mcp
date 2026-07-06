@@ -34,4 +34,21 @@ RDF-Connect pipelines are described in a \`pipeline.ttl\` (Turtle/RDF) file buil
 Data is harvested periodically from GitHub (repos tagged \`rdfc-processor\`, \`rdfc-runner\`,
 \`rdfc-orchestrator\`, \`rdfc-pipeline\`, \`rdf-connect\`) in the background — call \`catalog_status\` to see
 how fresh it is.
+
+## No suitable processor exists?
+
+The tools above only index \`.ttl\` metadata for *existing* processors. If \`list_components\` genuinely
+has nothing for your goal and you need to write a new one, first decide which runner/language it targets
+— **RDF-Connect processors are not JS/TS-only**:
+
+- **JS/TS** (\`rdfc:NodeRunner\`) — see the \`rdfc://authoring-guide\` resource (or \`write_processor\`
+  prompt); start from \`get_component TemplateProcessorJs\` (repo \`rdf-connect/template-processor-ts\`).
+- **Python** (\`rdfc:PyRunner\`) — no dedicated authoring guide yet; start from
+  \`get_component TemplateProcessorPy\` (repo \`rdf-connect/template-processor-py\`) and its sibling
+  \`LogProcessorPy\`/\`SendProcessorPy\` for real examples.
+- **Java** (\`rdfc:JvmRunner\`) — no dedicated authoring guide yet; start from
+  \`get_component TestProcessor\` (repo \`rdf-connect/template-processor-jvm\`).
+
+Whichever language, don't guess at the runner's API from scratch — read the template repo (and, for
+JS/TS, the authoring guide) instead.
 `;

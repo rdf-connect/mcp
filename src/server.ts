@@ -5,6 +5,7 @@ import type { CatalogStore } from "./catalogStore.js";
 import { generatePipelineSkeleton } from "./pipelineGenerator.js";
 import { shortId } from "./rdf.js";
 import { RDFC_GUIDE } from "./guide.js";
+import { RDFC_AUTHORING_GUIDE } from "./authoringGuide.js";
 import type { Catalog, Component, ComponentType, Repository } from "./types.js";
 
 function text(value: string) {
@@ -107,6 +108,26 @@ export function createMcpServer(store: CatalogStore): McpServer {
     },
     async (uri) => ({
       contents: [{ uri: uri.href, mimeType: "text/markdown", text: RDFC_GUIDE }],
+    }),
+  );
+
+  server.registerResource(
+    "rdfc-authoring-guide",
+    "rdfc://authoring-guide",
+    {
+      title: "RDF-Connect processor authoring guide (JS/TS only)",
+      description:
+        "Read this before writing a brand-new JS/TS processor (i.e. list_components/get_component found " +
+        "nothing suitable, and the target runner is rdfc:NodeRunner). Covers the Processor<T> lifecycle, " +
+        "how pipeline.ttl SHACL shapes become constructor args (including the rdfl:PathLens mechanism for " +
+        "'configured SHACL path' parameters), the SDS message convention, and a minimal project scaffold - " +
+        "the parts the catalog tools below can't tell you because they only index .ttl metadata, not " +
+        "runtime library APIs. For Python (rdfc:PyRunner) or Java (rdfc:JvmRunner) targets, none of this " +
+        "applies - use get_component on TemplateProcessorPy or TestProcessor instead.",
+      mimeType: "text/markdown",
+    },
+    async (uri) => ({
+      contents: [{ uri: uri.href, mimeType: "text/markdown", text: RDFC_AUTHORING_GUIDE }],
     }),
   );
 
@@ -352,6 +373,62 @@ export function createMcpServer(store: CatalogStore): McpServer {
         },
       ],
     }),
+  );
+
+  server.registerPrompt(
+    "write_processor",
+    {
+      title: "Write a new RDF-Connect processor",
+      description:
+        "Guided workflow for authoring a brand-new processor when no existing one fits. For `language: js` " +
+        "(the default) this covers the Processor<T> lifecycle, SHACL-to-args binding (including " +
+        "rdfl:PathLens), the SDS message convention, and testing. For `python`/`java` there is no dedicated " +
+        "guide yet - the prompt instead points at that runner's template processor to learn its conventions " +
+        "from.",
+      argsSchema: {
+        goal: z
+          .string()
+          .describe("What the new processor should do, e.g. 'alert when a sensor value at a configured path exceeds a threshold'."),
+        language: z
+          .enum(["js", "python", "java"])
+          .default("js")
+          .describe("Target runner/language: js -> rdfc:NodeRunner, python -> rdfc:PyRunner, java -> rdfc:JvmRunner."),
+      },
+    },
+    ({ goal, language }) => {
+      const nonJsGuidance: Record<"python" | "java", string> = {
+        python:
+          "There is no dedicated authoring guide for Python yet. Use get_component on `TemplateProcessorPy` " +
+          "(repo rdf-connect/template-processor-py) and `LogProcessorPy`/`SendProcessorPy` (repo " +
+          "rdf-connect/log-processor-py) for a real, working example of the PyRunner's processor base class, " +
+          "argument binding, and packaging (pyproject.toml + processor.ttl) conventions - read those repos " +
+          "directly rather than guessing.",
+        java:
+          "There is no dedicated authoring guide for Java yet. Use get_component on `TestProcessor` (repo " +
+          "rdf-connect/template-processor-jvm) and `RmlMapper` (repo rdf-connect/rml-processor-jvm) for a " +
+          "real, working example of the JvmRunner's processor interface, argument binding, and packaging " +
+          "conventions - read those repos directly rather than guessing.",
+      };
+
+      const text =
+        language === "js"
+          ? `${RDFC_AUTHORING_GUIDE}\n\n---\n\nGoal: ${goal}\n\n` +
+            "First confirm with list_components that nothing suitable already exists. Then, once " +
+            "@rdfc/js-runner and any needed ontology/lens packages are npm installed, prefer reading " +
+            "their installed .d.ts files over fetching source from GitHub. Write the processor, its " +
+            "processor.ttl SHACL shape, and tests that exercise transform() end-to-end."
+          : `Goal: ${goal}\n\nTarget language: ${language}.\n\n${nonJsGuidance[language]}\n\n` +
+            "First confirm with list_components that nothing suitable already exists for this goal.";
+
+      return {
+        messages: [
+          {
+            role: "user",
+            content: { type: "text", text },
+          },
+        ],
+      };
+    },
   );
 
   return server;

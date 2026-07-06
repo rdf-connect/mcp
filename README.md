@@ -144,6 +144,13 @@ refresh (it's slow and burns GitHub rate limit) - as an operator, prewarm or for
 
 **Resources**
 - `rdfc://guide` - short primer on RDF-Connect concepts and the recommended tool workflow.
+- `rdfc://authoring-guide` - **JS/TS only.** For when nothing in the catalog fits and you have to write a
+  new processor targeting `rdfc:NodeRunner`. The tools/catalog only index `.ttl` metadata; this covers the
+  runtime APIs that metadata can't: the `Processor<T>` lifecycle (`@rdfc/js-runner`), how a `processor.ttl`
+  SHACL shape becomes your constructor args (including `rdfl:PathLens`, the mechanism behind "extract a
+  value at a configured SHACL path" parameters), the SDS message convention, and a testing/scaffold
+  checklist. RDF-Connect processors aren't JS/TS-only though - for `rdfc:PyRunner`/`rdfc:JvmRunner` targets
+  there's no dedicated guide yet; use `get_component` on `TemplateProcessorPy`/`TestProcessor` instead.
 - `rdfc://catalog` - the full harvested catalog as JSON.
 - `rdfc://shapes` - the aggregated SHACL shapes graph (Turtle) for `rdfc:Pipeline` plus every discovered
   processor.
@@ -161,6 +168,9 @@ refresh (it's slow and burns GitHub rate limit) - as an operator, prewarm or for
 **Prompts**
 - `build_pipeline` - seeds a conversation with the primer plus a goal, pointing the agent at the tool
   workflow above.
+- `write_processor` - seeds a conversation with a goal and a `language` (`js` default, or `python`/`java`).
+  For `js` it includes the full authoring guide; for `python`/`java` it instead points at that runner's
+  template processor repo, since no dedicated guide exists for those yet.
 
 **HTTP-only routes** (when `MCP_HTTP_PORT` is set - not part of the MCP protocol itself)
 - `GET /` - plain HTML status page: live catalog stats, the MCP client config snippet, and a table of
